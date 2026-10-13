@@ -1,0 +1,17 @@
+# Dependencies, generated web bundle and test output
+node_modules/
+dist/
+coverage/
+
+# Downloaded Android SDK, Gradle distributions/dependencies and staging files
+.tools/
+
+# APK delivery copies
+artifacts/
+
+# Native generated files are covered by android/.gitignore
+
+# Local files
+*.log
+.DS_Store
+Thumbs.db

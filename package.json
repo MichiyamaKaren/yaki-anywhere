@@ -1,0 +1,22 @@
+{
+  "name": "yaki-anywhere",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "build": "node scripts/build-web.mjs",
+    "android:resources": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/android-assets.ps1",
+    "android:sync": "npm run build && npm run android:resources && cap sync android",
+    "android:open": "npm run android:sync && cap open android",
+    "android:apk": "npm run android:sync && node scripts/build-android.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}

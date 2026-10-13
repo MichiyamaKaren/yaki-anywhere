@@ -1,0 +1,14 @@
+{
+  "appId": "com.yaki.anywhere",
+  "appName": "Yaki Anywhere",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "native",
+      "style": "LIGHT"
+    }
+  }
+}
