@@ -11,8 +11,21 @@ yaki-anywhere/
 ├── capacitor.config.json      # 原生应用配置
 ├── android/                   # Capacitor Android 工程
 ├── src/                       # 应用源码
-│   ├── app.js                 # 页面交互与项目状态
+│   ├── app.js                 # 启动、模块连接与快捷键
+│   ├── state/
+│   │   └── project-store.js   # 项目状态、字幕修改与校对动作
+│   ├── services/
+│   │   ├── project-storage.js # 草稿恢复和自动保存
+│   │   └── project-files.js   # ASS 导入、编码识别与导出
+│   ├── features/
+│   │   ├── player.js          # 视频播放、跟随与自动批准
+│   │   ├── subtitle-editor.js # 文本和时间输入、确认与导航
+│   │   ├── subtitle-list.js   # 搜索、筛选和列表内部滚动
+│   │   └── timeline.js        # 时间轴绘制、缩放与拖动
+│   ├── ui/
+│   │   └── workspace.js       # 项目信息、进度、提示与帮助
 │   ├── lib/
+│   │   ├── dom.js             # DOM 查找与 HTML 转义
 │   │   ├── subtitles.js       # ASS 解析、导出及时间轴计算
 │   │   └── native-files.js    # 网页下载与 Android 原生保存
 │   └── styles/
@@ -29,14 +42,17 @@ yaki-anywhere/
 │   ├── setup-android-sdk.ps1  # 项目内 Android SDK 安装
 │   └── android-assets.ps1     # 完整生成 Android res 资源
 └── tests/
-    └── subtitles.test.mjs     # 字幕模块测试
+    ├── subtitles.test.mjs     # 字幕模块测试
+    └── project.test.mjs        # 项目修改、草稿保存与跟随滚动测试
 ```
 
 本地服务将 `public/` 映射到网站根路径，例如 `public/sw.js` 通过 `/sw.js` 访问；源码和图标分别通过 `/src/`、`/assets/` 访问。测试、脚本与文档不作为网页资源提供。
 
+模块通过 `project-store` 的修改动作和订阅协作，播放器与时间轴通过入口传入的回调连接。播放状态、列表筛选和时间轴拖动状态各自保留在所属模块中；选择字幕只更新列表选中状态，不重建整张列表。新增模块也纳入 PWA 离线缓存。
+
 ## 本地运行
 
-需要 Node.js 22+。首次检出运行 `npm ci` 安装锁定版本的依赖，再运行 `npm run dev`，打开 http://localhost:5174 。运行 `npm test` 执行 ASS 解析和导出测试。
+需要 Node.js 22+。首次检出运行 `npm ci` 安装锁定版本的依赖，再运行 `npm run dev`，打开 http://localhost:5174 。运行 `npm test` 执行字幕处理、项目状态与功能模块测试。
 
 手机与电脑在同一网络时可访问电脑的局域网 IP 和端口 5174。正式安装 PWA 和离线缓存需要 HTTPS（localhost 除外）；普通局域网 HTTP 仅供网页预览。此开发服务器不用于公网部署。
 
@@ -62,8 +78,8 @@ yaki-anywhere/
 
 ## 验证
 
-`npm test` 覆盖样式/Comment 保留、逗号和标签、多行文本保留、旧草稿迁移、字幕时间轴范围、时间进位、错误输入、BOM/CRLF 和字段顺序。
-浏览器已检查桌面与 390px 手机布局，编辑、校对确认、筛选、面板折叠、时间轴切换与拖动调时操作。
+`npm test` 共 16 项测试，覆盖 ASS 样式/Comment 和多行文本保留、旧草稿迁移、时间格式与范围、项目修改与校对状态、草稿保存、编码回退、列表内部滚动、时间轴拖动提交，以及播放跟随、单句暂停和自动批准的跳转保护。
+本次拆分后已在浏览器恢复原有草稿，并检查 390px 手机布局、字幕切换、搜索和时间轴缩放。播放边界和拖动提交使用模块测试检查；视频编码及实机兼容性仍需加载真实视频确认。
 
 ## Android 打包
 
