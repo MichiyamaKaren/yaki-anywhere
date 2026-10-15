@@ -1,4 +1,4 @@
-const CACHE = "yaki-v13";
+const CACHE = "yaki-v14";
 const APP_FILES = [
   "/",
   "/src/styles/app.css",
@@ -14,6 +14,10 @@ const APP_FILES = [
   "/src/features/subtitle-editor.js",
   "/src/features/subtitle-list.js",
   "/src/features/timeline.js",
+  "/src/features/audio-spectrum.js",
+  "/src/workers/audio-spectrum.js",
+  "/src/lib/spectrogram.js",
+  "/assets/vendor/mediabunny.mjs",
   "/assets/icons/icon.svg",
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",

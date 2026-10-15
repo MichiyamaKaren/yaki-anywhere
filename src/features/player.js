@@ -2,8 +2,10 @@ import { byId as $ } from "../lib/dom.js";
 import { plainText } from "../lib/subtitles.js";
 
 const clock = (time) => `${String(Math.floor(time / 60)).padStart(2, "0")}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
+// Media seeks can land a microsecond before an ASS boundary. Match at millisecond precision.
+const subtitleTime = (time) => Math.round(time * 1000) / 1000;
 
-export function createPlayer({ store, toast, onPosition }) {
+export function createPlayer({ store, toast, onPosition, onMedia = () => {} }) {
   const video = $("video");
   let videoUrl = null, mode = "continuous", lineEnd = null;
   let follow = true, autoApprove = false, lastPlaybackTime = null, editingTimeline = false;
@@ -21,7 +23,7 @@ export function createPlayer({ store, toast, onPosition }) {
   }
   function renderOverlay() {
     $("subtitleOverlay").textContent = videoUrl ? store.getState().project.entries
-      .filter((entry) => video.currentTime >= entry.start && video.currentTime < entry.end)
+      .filter((entry) => subtitleTime(video.currentTime) >= entry.start && subtitleTime(video.currentTime) < entry.end)
       .map((entry) => plainText(entry.text)).join("\n") : "";
   }
   function seek(time) {
@@ -83,7 +85,7 @@ export function createPlayer({ store, toast, onPosition }) {
     }
     if (follow && mode === "continuous" && lineEnd === null) {
       const { project, index } = store.getState();
-      const next = project.entries.findIndex((entry) => time >= entry.start && time < entry.end);
+      const next = project.entries.findIndex((entry) => subtitleTime(time) >= entry.start && subtitleTime(time) < entry.end);
       if (next >= 0 && next !== index) store.selectSubtitle(next, { seek: false, follow: true });
     }
     renderOverlay();
@@ -107,6 +109,7 @@ export function createPlayer({ store, toast, onPosition }) {
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     videoUrl = URL.createObjectURL(file);
     video.src = videoUrl;
+    onMedia(file);
     $("videoEmpty").hidden = true;
     $("videoEmpty").style.display = "none";
     lineEnd = null;

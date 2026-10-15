@@ -199,12 +199,18 @@
                 <div class="timeline-scroll" id="timelineScroll">
                   <div class="timeline" id="timeline">
                     <div class="ruler" id="ruler"></div>
+                    <canvas id="audioSpectrum" class="audio-spectrum" role="img"
+                      aria-label="当前字幕音频频谱：横轴为时间，纵轴为频率，颜色越亮能量越强"></canvas>
+                    <div id="audioFrequencyLabels" class="audio-frequency-labels" hidden>
+                      <span>8 kHz</span><span>50 Hz</span>
+                    </div>
                     <div class="timeline-track" id="timelineTrack"></div>
                     <div class="playhead" id="playhead"></div>
                   </div>
                 </div>
                 <div class="timeline-hint">
-                  拖动字幕块移动时间 · 拖动两端调整时长
+                  <span id="audioSpectrumStatus" role="status">加载视频后显示音频频谱</span>
+                  <span>拖动字幕块或两端调整时间</span>
                 </div>
               </section>
               <div class="timing-fields">

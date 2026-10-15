@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
-    "@capacitor/core": "^8.5.3"
+    "@capacitor/core": "^8.5.3",
+    "mediabunny": "^1.61.4"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3"

@@ -171,6 +171,9 @@ test("player preserves follow, approval seek guards, single-line pause and empty
   assert.equal(store.getState().index, 1);
   assert.equal(events.find((event) => event.type === "selection").follow, true);
   assert.equal(store.getState().project.entries[0].reviewed, true);
+  video.currentTime = 1.999999;
+  video.ontimeupdate();
+  assert.equal(store.getState().index, 1, "fractional seek error must not follow back to the previous subtitle");
   video.onseeking();
   video.currentTime = 4;
   video.ontimeupdate();

@@ -12,6 +12,7 @@ const port = 5174;
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".png": "image/png",
   ".svg": "image/svg+xml",
@@ -30,8 +31,9 @@ http
         pathname === "/index.html" ||
         pathname.startsWith("/src/") ||
         pathname.startsWith("/assets/");
-      const root = isApplicationFile ? projectRoot : publicRoot;
-      const file = path.resolve(
+      const isVendor = pathname === "/assets/vendor/mediabunny.mjs";
+      const root = isVendor ? path.join(projectRoot, "node_modules/mediabunny") : isApplicationFile ? projectRoot : publicRoot;
+      const file = isVendor ? path.join(root, "dist/bundles/mediabunny.min.mjs") : path.resolve(
         root,
         "." + (pathname === "/" ? "/index.html" : pathname),
       );

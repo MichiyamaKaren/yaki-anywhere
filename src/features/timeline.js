@@ -1,7 +1,7 @@
 import { byId as $, escapeHTML } from "../lib/dom.js";
 import { timelineRange, formatTime, plainText } from "../lib/subtitles.js";
 
-export function createTimeline({ store, getPosition, seek, onDragStart, onDragEnd }) {
+export function createTimeline({ store, getPosition, seek, onDragStart, onDragEnd, onRange = () => {} }) {
   const timeline = $("timeline"), track = $("timelineTrack"), scroller = $("timelineScroll");
   let zoom = 1, view = null, drag = null;
   function updatePosition(time) {
@@ -16,6 +16,7 @@ export function createTimeline({ store, getPosition, seek, onDragStart, onDragEn
     $("timelineZoom").disabled = !entry;
     if (!entry) {
       view = null;
+      onRange(null);
       $("ruler").innerHTML = "";
       track.innerHTML = '<div class="timeline-empty">导入 ASS 字幕后显示时间轴</div>';
       updatePosition(0);
@@ -30,8 +31,9 @@ export function createTimeline({ store, getPosition, seek, onDragStart, onDragEn
     timeline.style.width = `${Math.max(1, zoom) * 100}%`;
     const span = view.end - view.start;
     $("ruler").innerHTML = Array.from({ length: 5 }, (_, i) => `<span style="left:${i * 25}%">${formatTime(view.start + span * i / 4)}</span>`).join("");
-    track.innerHTML = `<div class="timeline-block active" data-index="${index}" style="left:${(entry.start - view.start) / span * 100}%;width:${(entry.end - entry.start) / span * 100}%" title="${escapeHTML(plainText(entry.text))}"><span class="handle" data-edge="start" aria-label="拖动开始时间">│</span><span class="block-label">${String(index + 1).padStart(2, "0")} ${escapeHTML(plainText(entry.text))}</span><span class="handle" data-edge="end" aria-label="拖动结束时间">│</span></div>`;
+    track.innerHTML = `<div class="timeline-block active" data-index="${index}" style="left:${(entry.start - view.start) / span * 100}%;width:${(entry.end - entry.start) / span * 100}%" title="${escapeHTML(plainText(entry.text))}"><span class="handle" data-edge="start" aria-label="拖动开始时间">│</span><span class="block-label">${escapeHTML(plainText(entry.text))}</span><span class="handle" data-edge="end" aria-label="拖动结束时间">│</span></div>`;
     updatePosition(getPosition());
+    onRange({ ...view });
   }
   $("timelineZoom").oninput = () => {
     const center = (scroller.scrollLeft + scroller.clientWidth / 2) / timeline.clientWidth;

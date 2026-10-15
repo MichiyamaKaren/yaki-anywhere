@@ -1906,3 +1906,44 @@ main {
   border-color: var(--purple);
   color: #fff;
 }
+/* The spectrogram shares the subtitle track's space and time coordinates. */
+.audio-spectrum {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  width: 100%;
+  height: 50px;
+  pointer-events: none;
+  border-radius: 4px;
+}
+.audio-frequency-labels {
+  position: absolute;
+  top: 30px;
+  right: 3px;
+  height: 50px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 8px;
+  color: #fff;
+  text-shadow: 0 1px 3px #18162d;
+  pointer-events: none;
+  z-index: 2;
+}
+.audio-frequency-labels[hidden] { display: none; }
+.has-spectrum .timeline-track {
+  background: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), #ffffff20 calc(10% - 1px), #ffffff20 10%);
+}
+.has-spectrum .timeline-block.active {
+  background: #a78adb45;
+  border-color: #d8c5ff;
+  text-shadow: 0 1px 3px #18162d;
+}
+.has-spectrum .handle { background: #d8c5ff40; }
+.has-spectrum .playhead { background: #ffe59f; z-index: 3; }
+.timeline-hint { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+@media (max-width: 640px) {
+  .audio-spectrum, .audio-frequency-labels { height: 42px; }
+  .timeline-hint span:last-child { display: inline; }
+  .timeline-hint { font-size: 8px; }
+}

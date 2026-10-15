@@ -8,6 +8,7 @@ import { createPlayer } from "./features/player.js";
 import { createSubtitleEditor } from "./features/subtitle-editor.js";
 import { createSubtitleList } from "./features/subtitle-list.js";
 import { createTimeline } from "./features/timeline.js";
+import { createAudioSpectrum } from "./features/audio-spectrum.js";
 
 if (isAndroidApp()) {
   $("installHelp").hidden = true;
@@ -24,8 +25,10 @@ const persistence = createDraftPersistence({
   store, storage, onStatus: workspace.setSaveStatus, onError: workspace.toast,
 });
 let timeline;
+const spectrum = createAudioSpectrum();
 const player = createPlayer({
   store, toast: workspace.toast, onPosition: (time) => timeline?.updatePosition(time),
+  onMedia: spectrum.setMedia,
 });
 const files = createProjectFiles({ store, pausePlayback: player.pauseLine, toast: workspace.toast });
 const list = createSubtitleList({ store, playLine: player.playLine, importSubtitles: files.importSubtitles });
@@ -33,6 +36,7 @@ createSubtitleEditor({ store, playLine: player.playLine, toast: workspace.toast 
 timeline = createTimeline({
   store, getPosition: player.getPosition, seek: player.seek,
   onDragStart: player.beginTimelineEdit, onDragEnd: player.endTimelineEdit,
+  onRange: spectrum.setRange,
 });
 
 window.addEventListener("keydown", (event) => {
