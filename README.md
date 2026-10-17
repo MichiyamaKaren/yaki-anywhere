@@ -15,10 +15,15 @@ yaki-anywhere/
 │   ├── state/
 │   │   └── project-store.js   # 项目状态、字幕修改与校对动作
 │   ├── services/
-│   │   ├── project-storage.js # 草稿恢复和自动保存
-│   │   └── project-files.js   # ASS 导入、编码识别与导出
+│   │   ├── project-storage.js # 旧草稿读取与迁移入口
+│   │   ├── project-files.js   # ASS 导入、编码识别与导出
+│   │   ├── project-repository.js # ASS 副本、bitmap、校验与保存接口
+│   │   ├── project-persistence.js # 未保存状态、串行保存与自动保存规则
+│   │   ├── web-project-storage.js # OPFS / IndexedDB 私有存储
+│   │   └── native-project-storage.js # Android 原生存储桥接
 │   ├── features/
 │   │   ├── player.js          # 视频播放、跟随与自动批准
+│   │   ├── project-manager.js # 项目列表、切换、文件关联与未保存提示
 │   │   ├── subtitle-editor.js # 文本和时间输入、确认与导航
 │   │   ├── subtitle-list.js   # 搜索、筛选和列表内部滚动
 │   │   ├── timeline.js        # 时间轴绘制、缩放与拖动
@@ -26,11 +31,13 @@ yaki-anywhere/
 │   ├── workers/
 │   │   └── audio-spectrum.js  # 分段音轨解码、频谱计算与缓存
 │   ├── ui/
-│   │   └── workspace.js       # 项目信息、进度、提示与帮助
+│   │   ├── workspace.js       # 项目信息、进度、提示与帮助
+│   │   └── page-navigation.js # 工作台和项目管理独立页面的路由
 │   ├── lib/
 │   │   ├── dom.js             # DOM 查找与 HTML 转义
 │   │   ├── subtitles.js       # ASS 解析、导出及时间轴计算
 │   │   ├── spectrogram.js     # STFT、频率映射与音频时间对齐
+│   │   ├── review-state.js    # 校对 bitmap 编解码与 ASS 哈希
 │   │   └── native-files.js    # 网页下载与 Android 原生保存
 │   └── styles/
 │       └── app.css            # 界面与响应式样式
@@ -42,12 +49,13 @@ yaki-anywhere/
 ├── scripts/
 │   ├── dev-server.mjs         # 本地预览服务
 │   ├── build-web.mjs          # 打包应用资源
-│   ├── build-android.mjs      # 生成调试 APK
+│   ├── build-android.mjs      # npm 到 fastlane 的启动入口
 │   ├── setup-android-sdk.ps1  # 项目内 Android SDK 安装
 │   └── android-assets.ps1     # 完整生成 Android res 资源
 └── tests/
     ├── subtitles.test.mjs     # 字幕模块测试
-    └── project.test.mjs        # 项目修改、草稿保存与跟随滚动测试
+    ├── project.test.mjs       # 项目修改、播放与跟随滚动测试
+    └── storage.test.mjs       # 私有存储、迁移、冲突、失败恢复与保存规则
 ```
 
 本地服务将 `public/` 映射到网站根路径，例如 `public/sw.js` 通过 `/sw.js` 访问；源码和图标分别通过 `/src/`、`/assets/` 访问。测试、脚本与文档不作为网页资源提供。
@@ -58,7 +66,7 @@ yaki-anywhere/
 
 需要 Node.js 22+。首次检出运行 `npm ci` 安装锁定版本的依赖，再运行 `npm run dev`，打开 http://localhost:5174 。运行 `npm test` 执行字幕处理、项目状态与功能模块测试。
 
-手机与电脑在同一网络时可访问电脑的局域网 IP 和端口 5174。正式安装 PWA 和离线缓存需要 HTTPS（localhost 除外）；普通局域网 HTTP 仅供网页预览。此开发服务器不用于公网部署。
+手机与电脑在同一网络时可访问电脑的局域网 IP 和端口 5174。项目哈希、OPFS、视频句柄、PWA 等能力需要安全上下文，请使用 HTTPS 或 localhost；普通局域网 HTTP 不支持完整项目功能。此开发服务器不用于公网部署。
 
 ## 功能
 
@@ -69,23 +77,32 @@ yaki-anywhere/
 - “当前字幕”内置时间轴：只显示所选字幕，拖动字幕块移动时间、拖动两端调整时长；缩放滑块以当前字幕时长为基础调整比例，放大后可在时间轴内部横向滚动。字幕文本框固定两行高度。
 - 当前字幕时间轴同步显示视频音轨频谱，横轴对应时间、纵轴为对数频率（50 Hz–8 kHz，低采样率音轨上限随采样率调整），颜色亮度对应音频能量。暂停时也可查看；字幕切换、时间修改、缩放和横向滚动更新对应区间，播放指针与字幕块共用同一时间刻度。
 - 播放设置、当前字幕、字幕列表均支持独立折叠，原生键盘操作可用。
-- 浏览器本地保存当前字幕项目；导出 UTF-8 BOM ASS。
+- 多项目管理：导入 ASS 创建私有副本，支持切换、重命名、关闭和删除项目。桌面侧边栏及手机顶部“项目”入口进入独立的 `#/projects` 页面，项目以卡片展示。工作台与项目管理支持前进、后退和刷新；页面切换保留内存编辑状态，进入项目管理暂停视频。原文件只读；导出 UTF-8 BOM ASS 供外部应用使用。
+- 普通编辑只标记“未保存”，点击“保存”或 Ctrl / ⌘ S 写入项目；自动批准开启且有修改时自动保存，切到后台也保存。切换或关闭未保存项目时选择保存、放弃或取消。
 - 响应式布局、安卓添加到主屏幕、离线应用外壳。
 
 ## 当前边界
 
 - Android 使用 Capacitor 原生工程；QQ 小程序尚未实现。调试 APK 用于本地安装体验，商店发布需要正式签名。
-- 视频不上传、不持久化，刷新后需重新选择。仅支持所在浏览器可解码的视频格式。
+- 视频不上传。网页保存原视频的只读文件句柄；不支持句柄、权限不足或文件不可用时提示重新授权或关联，不保存视频内容。Android 把视频流式复制到应用内部私有目录。编码支持取决于所在浏览器 / WebView。
 - 频谱解码支持取决于浏览器音频解码能力；没有音轨或不支持的编码会显示提示，不影响字幕编辑。
 - 当前版本只编辑字幕文本，不拆分原文和译文；每个 Dialogue 的全部文本（包括多行）完整保留。双语功能留待后续开发。旧版本本地草稿自动合并为完整文本。
 - 预览显示纯文本，不渲染 ASS 动画、字体与定位特效；导出保留这些标签和样式定义。
-- 自动保存仅保留一个项目。导入新项目会提示先导出；清理浏览器数据会删除本地保存。
+- 项目只保留当前保存版本，不保存逐条编辑记录或历史快照。旧 `localStorage` 草稿会迁移为一个项目，写入并校验成功后才移除旧草稿。清除站点数据或卸载 App 会删除相应私有项目。
 - 首次打开为空白工作区；导入字幕后显示项目内容。视频区域使用抽象山景占位画面，不包含示例字幕或视频素材。尚未用用户真实视频做设备兼容性验证。
 
 ## 验证
 
-`npm test` 共 21 项测试，覆盖 ASS 样式/Comment 和多行文本保留、旧草稿迁移、时间格式与范围、项目修改与校对状态、草稿保存、编码回退、列表内部滚动、时间轴拖动提交，以及播放跟随、单句暂停和自动批准的跳转保护。频谱测试检查已知频率、随时间变化的频率、静音与能量强弱、解码样本裁剪、声道混合和时间戳间隙。
+`npm test` 共 35 项测试，覆盖 ASS 保留、旧草稿迁移、时间轴、播放跟随、自动批准与频谱；存储测试使用 IndexedDB 测试实现验证文件副本、bitmap 校验、写入失败、多窗口版本冲突、迁移中断、无修改不写入、自动批准开关及保存期间继续编辑或重命名。
 浏览器检查包括 390px 手机布局、字幕切换、搜索、时间轴缩放与频谱生成，已用合成 WAV 音频和 MP4 视频验证解码及绘制。用户视频编码及 Android 实机兼容性仍需加载对应视频确认。
+
+## 项目私有存储
+
+详细规则见 [项目存储 spec](docs/project-storage-spec.md)。网页 ASS 存入 OPFS；不可用时存入 IndexedDB 的 Blob。IndexedDB 的 `yaki-projects` 数据库保存项目元数据、当前 ASS 文件引用、校对 bitmap 和原视频句柄。只有打开项目时解析 ASS 到内存；不把解析后的逐条对象持久化。
+
+Android 的 `ProjectFilesPlugin` 使用 `getNoBackupFilesDir()/yaki-projects/` 保存 ASS、视频和 SQLite 元数据，关闭系统备份；不放到外部共享目录，也不向其他 App 授权这些私有文件。网页提供站点隔离，不能等同于原生应用沙箱对本机其他进程的隔离。
+
+保存先完成新 ASS，再提交同版本元数据和 bitmap；内容未变化时只更新状态。校验使用 SHA-256、条数与 bitmap 长度，读取时不把不匹配的校对状态套到字幕上。`schemaVersion`、项目级 `revision` 与独立保存接口为未来快照留出空间。后台保存依赖平台生命周期事件，强制结束进程时只能保证最后一次完成的保存。
 
 ## 音频频谱实现
 
@@ -95,11 +112,11 @@ yaki-anywhere/
 
 ## Android 打包
 
-应用名称为 Yaki Anywhere，包名为 `com.yaki.anywhere`，版本为 0.1.0。使用 Capacitor 8.5.3，最低 Android 7（API 24），编译目标为 Android SDK 36。
+应用名称为 Yaki Anywhere，包名为 `com.yaki.anywhere`。版本名统一读取 `package.json`，构建号通过 `android:version` 管理。使用 Capacitor 8.5.3，最低 Android 7（API 24），编译目标为 Android SDK 36。
 
 ### 首次配置（Windows）
 
-目前资源生成和 SDK 安装脚本面向 Windows，需要 Node.js 22+、JDK 21（设置 `JAVA_HOME` 并加入 `PATH`）、Windows PowerShell 和 `tar.exe`。Windows 10/11 通常自带后两项。Android Studio 为可选工具，构建使用工程自带的 Gradle Wrapper，无需另外安装 Gradle。
+目前资源生成和 SDK 安装脚本面向 Windows，需要 Node.js 22+、JDK 21+（设置 `JAVA_HOME` 并加入 `PATH`）、Ruby 3.3+ / Bundler、Windows PowerShell 和 `tar.exe`。Windows 10/11 通常自带后两项。新增的发布工具只有 fastlane；Android Studio 为可选工具，构建继续使用工程自带的 Gradle Wrapper。
 
 ```powershell
 npm ci
@@ -119,6 +136,10 @@ SDK 有两种配置方式，任选一种：
 
 构建脚本优先使用 `ANDROID_HOME`，其次使用 `ANDROID_SDK_ROOT`，最后使用 `.tools/android/sdk/`；自动写入本机的 `android/local.properties`。
 
+安装 Ruby 后执行一次 `npm run android:setup`，由 Bundler 按 `Gemfile.lock` 安装 fastlane 及其 Android 版本插件。也可在项目根目录执行标准的 `bundle install`。npm 入口优先使用 PATH 中的 Ruby；Windows 下会自动查找 RubyInstaller 默认安装目录，最后回退到 `.tools/ruby/bin/`。也可用 `RUBY_EXECUTABLE` 指定 Ruby 路径。依赖安装到忽略的 `.tools/gems/`。
+
+调试 APK 固定使用 `.tools/android/yaki-anywhere-debug.keystore`，缺少时停止打包。请备份并在新检出目录恢复同一文件。正式签名、Play 凭据、完整命令及配置位置见 [Android 打包与发布](docs/android-build.md)。
+
 ### 日常同步与打包
 
 ```powershell
@@ -130,15 +151,20 @@ npm run android:open
 
 # 网页效果确认后，生成调试 APK
 npm run android:apk
+
+# 准备发布新版本时：npm 版本与 Android 构建号同时升级
+npm run android:version
 ```
+
+`android:version` 默认升级 patch，也可执行 `npm run android:version -- type:minor` 或 `type:major`。日常重复打包不升版本。`versionName` 直接读取 `package.json`，`versionCode` 由 fastlane 的现成 Android 版本插件递增；不需要手动同步两个文件。正式 APK、Play AAB 和上传命令分别是 `android:release`、`android:aab`、`android:play`，需先填写本地凭据。
 
 `android:apk` 按以下顺序执行：
 
 1. `build-web.mjs` 将网页源码、图标和 Capacitor JavaScript 运行时复制到 `dist/`。
 2. `android-assets.ps1` 从 Capacitor 模板和项目源文件完整生成 `android/app/src/main/res/`。
 3. `cap sync android` 复制 Web 资源，生成 Capacitor 配置、插件信息及插件相关 Gradle 文件。
-4. `build-android.mjs` 调用 `android/gradlew.bat assembleDebug`，将 Gradle 下载和依赖缓存放入 `.tools/gradle/`。
-5. 将 `android/app/build/outputs/apk/debug/app-debug.apk` 复制到 `artifacts/android/yaki-<package.json版本>-debug.apk`。当前版本为 `yaki-0.1.0-debug.apk`。
+4. `build-android.mjs` 仅启动 Bundler / fastlane；`fastlane/Fastfile` 的打包流程调用 Gradle 的 `assembleDebug`，缓存放入 `.tools/gradle/`。
+5. 将 `android/app/build/outputs/apk/debug/app-debug.apk` 复制到 `artifacts/android/yaki-<package.json版本>-debug.apk`。
 
 首次运行 Wrapper 时会按 `android/gradle/wrapper/gradle-wrapper.properties` 下载 Gradle 8.14.3；首次构建还会下载 Android Gradle Plugin 等依赖，需要联网。后续复用缓存。
 
@@ -146,13 +172,13 @@ npm run android:apk
 
 `android/app/src/main/res/` 整个目录已加入 `.gitignore`，可在缺失时重建。单独生成资源使用 `npm run android:resources`；准备运行原生应用时使用 `npm run android:sync`，它还会补齐 Capacitor 生成的文件。
 
-| 输入 | 生成内容 |
-| --- | --- |
+| 输入                                                         | 生成内容                                                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | `node_modules/@capacitor/cli/assets/android-template.tar.gz` | 默认布局、主题、文件路径 XML、适配图标 XML 和各尺寸 PNG 模板；版本由 `package-lock.json` 锁定 |
-| `assets/icons/icon-512.png` | 不同密度的应用图标、前景图标，以及横屏/竖屏启动图 |
-| `capacitor.config.json` 的 `appName`、`appId` | `values/strings.xml` 中的应用名称、包名和 URL scheme |
-| `scripts/android-assets.ps1` 中的主题和绘制规则 | 紫色主题、图标背景色及启动图布局 |
-| `cap sync android` | `res/xml/config.xml` 等 Capacitor 生成配置 |
+| `assets/icons/icon-512.png`                                  | 不同密度的应用图标、前景图标，以及横屏/竖屏启动图                                             |
+| `capacitor.config.json` 的 `appName`、`appId`                | `values/strings.xml` 中的应用名称、包名和 URL scheme                                          |
+| `scripts/android-assets.ps1` 中的主题和绘制规则              | 紫色主题、图标背景色及启动图布局                                                              |
+| `cap sync android`                                           | `res/xml/config.xml` 等 Capacitor 生成配置                                                    |
 
 资源生成先在 `.tools/android/` 下的独立临时目录完成，再替换 `res/`，不依赖已有资源。修改名称、图标和主题时应修改上表对应输入；不要直接修改生成目录，下次同步会覆盖它。新增定制资源也应纳入生成脚本。
 
@@ -160,18 +186,21 @@ npm run android:apk
 
 ### Gradle 与下载文件的提交规则
 
-| 路径 | 是否提交 | 来源和作用 |
-| --- | --- | --- |
-| `android/gradlew`、`android/gradlew.bat` | **提交** | Capacitor 模板附带的 Wrapper 启动脚本，供各平台启动固定版本的 Gradle |
-| `android/gradle/wrapper/gradle-wrapper.jar` | **提交** | 模板附带的小型 Wrapper 程序，负责下载并启动 Gradle；不是完整 Gradle 安装包 |
-| `android/gradle/wrapper/gradle-wrapper.properties` | **提交** | 定义 Gradle 版本、下载地址和缓存位置 |
-| `android/build.gradle`、`android/app/build.gradle`、`settings.gradle`、`variables.gradle`、`gradle.properties` | **提交** | 原生工程构建配置，包含 SDK 版本、应用版本和模块配置 |
-| `android/capacitor.settings.gradle`、`android/app/capacitor.build.gradle`、`android/capacitor-cordova-android-plugins/` | 忽略 | `cap sync android` 根据已安装插件生成 |
-| `.tools/gradle/wrapper/dists/` | 忽略 | Wrapper 下载、解压的 Gradle 8.14.3 完整发行包（当前为 `-all`，包含运行时、源码和文档） |
-| `.tools/gradle/caches/`、`daemon/`、`native/` 等 | 忽略 | 构建时下载的依赖、运行缓存和本机状态 |
-| `.tools/android/` | 忽略 | SDK 安装脚本下载的 `commandlinetools.zip`、SDK 组件、许可文件及资源生成临时文件 |
-| `android/.gradle/`、各模块 `build/`、`android/local.properties` | 忽略 | 本机缓存、构建产物及 SDK 路径 |
-| `node_modules/`、`dist/`、`artifacts/` | 忽略 | npm 下载依赖、Web 构建结果及 APK 交付副本 |
+| 路径                                                                                                                    | 是否提交 | 来源和作用                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `android/gradlew`、`android/gradlew.bat`                                                                                | **提交** | Capacitor 模板附带的 Wrapper 启动脚本，供各平台启动固定版本的 Gradle                   |
+| `android/gradle/wrapper/gradle-wrapper.jar`                                                                             | **提交** | 模板附带的小型 Wrapper 程序，负责下载并启动 Gradle；不是完整 Gradle 安装包             |
+| `android/gradle/wrapper/gradle-wrapper.properties`                                                                      | **提交** | 定义 Gradle 版本、下载地址和缓存位置                                                   |
+| `android/build.gradle`、`android/app/build.gradle`、`settings.gradle`、`variables.gradle`、`gradle.properties`          | **提交** | 原生工程构建配置，包含 SDK 版本、应用版本和模块配置                                    |
+| `Gemfile`、`Gemfile.lock`、`fastlane/Fastfile`、`fastlane/Pluginfile`、`fastlane/.env.example`                          | **提交** | fastlane 的依赖锁定、发布步骤与本地配置示例                                            |
+| `android/capacitor.settings.gradle`、`android/app/capacitor.build.gradle`、`android/capacitor-cordova-android-plugins/` | 忽略     | `cap sync android` 根据已安装插件生成                                                  |
+| `.tools/gradle/wrapper/dists/`                                                                                          | 忽略     | Wrapper 下载、解压的 Gradle 8.14.3 完整发行包（当前为 `-all`，包含运行时、源码和文档） |
+| `.tools/gradle/caches/`、`daemon/`、`native/` 等                                                                        | 忽略     | 构建时下载的依赖、运行缓存和本机状态                                                   |
+| `.tools/android/`                                                                                                       | 忽略     | SDK、许可文件、资源生成临时文件及开发签名密钥；密钥须另行备份                          |
+| `.tools/ruby/`、`.tools/gems/`、`.tools/bundler/`、`.bundle/`                                                           | 忽略     | 本地 Ruby、fastlane 依赖和 Bundler 缓存 / 配置                                         |
+| `fastlane/.env`、`*.keystore`、`*.jks`                                                                                  | 忽略     | 本地发布凭据和密钥                                                                     |
+| `android/.gradle/`、各模块 `build/`、`android/local.properties`                                                         | 忽略     | 本机缓存、构建产物及 SDK 路径                                                          |
+| `node_modules/`、`dist/`、`artifacts/`                                                                                  | 忽略     | npm 下载依赖、Web 构建结果及 APK 交付副本                                              |
 
 历史执行记录确认：2026-10-13 15:38（北京时间）运行 `npx cap add android` 创建了工程和 Wrapper；15:44 运行 SDK 安装脚本下载 Android 工具；15:46 设置 `GRADLE_USER_HOME` 为 `.tools/gradle/` 并执行 `gradlew.bat --version`，触发 Gradle 下载。后续 `build-android.mjs` 使用同一缓存目录。因此 `android/gradle/` 应保留，`.tools/gradle/` 应忽略，不能按名称把两者一起忽略。
 

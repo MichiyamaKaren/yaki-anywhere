@@ -1,6 +1,6 @@
 {
   "name": "yaki-anywhere",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,13 @@
     "android:resources": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/android-assets.ps1",
     "android:sync": "npm run build && npm run android:resources && cap sync android",
     "android:open": "npm run android:sync && cap open android",
-    "android:apk": "npm run android:sync && node scripts/build-android.mjs",
+    "android:setup": "node scripts/build-android.mjs setup",
+    "android:version": "node scripts/build-android.mjs bump",
+    "android:info": "node scripts/build-android.mjs info",
+    "android:apk": "node scripts/build-android.mjs apk",
+    "android:release": "node scripts/build-android.mjs apk release:true",
+    "android:aab": "node scripts/build-android.mjs aab",
+    "android:play": "node scripts/build-android.mjs play",
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
@@ -18,6 +24,7 @@
     "mediabunny": "^1.61.4"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.3"
+    "@capacitor/cli": "^8.5.3",
+    "fake-indexeddb": "^6.2.5"
   }
 }

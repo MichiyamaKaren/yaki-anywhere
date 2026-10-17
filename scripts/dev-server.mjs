@@ -32,11 +32,17 @@ http
         pathname.startsWith("/src/") ||
         pathname.startsWith("/assets/");
       const isVendor = pathname === "/assets/vendor/mediabunny.mjs";
-      const root = isVendor ? path.join(projectRoot, "node_modules/mediabunny") : isApplicationFile ? projectRoot : publicRoot;
-      const file = isVendor ? path.join(root, "dist/bundles/mediabunny.min.mjs") : path.resolve(
-        root,
-        "." + (pathname === "/" ? "/index.html" : pathname),
-      );
+      const root = isVendor
+        ? path.join(projectRoot, "node_modules/mediabunny")
+        : isApplicationFile
+          ? projectRoot
+          : publicRoot;
+      const file = isVendor
+        ? path.join(root, "dist/bundles/mediabunny.min.mjs")
+        : path.resolve(
+            root,
+            "." + (pathname === "/" ? "/index.html" : pathname),
+          );
       if (!file.startsWith(root + path.sep)) {
         response.writeHead(403).end("Forbidden");
         return;

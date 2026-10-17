@@ -1,4 +1,4 @@
-const CACHE = "yaki-v14";
+const CACHE = "yaki-v20";
 const APP_FILES = [
   "/",
   "/src/styles/app.css",
@@ -9,7 +9,15 @@ const APP_FILES = [
   "/src/state/project-store.js",
   "/src/services/project-storage.js",
   "/src/services/project-files.js",
+  "/src/lib/review-state.js",
+  "/src/services/project-repository.js",
+  "/src/services/project-persistence.js",
+  "/src/services/web-project-storage.js",
+  "/src/services/native-project-storage.js",
+  "/src/features/project-manager.js",
   "/src/ui/workspace.js",
+  "/src/ui/page-navigation.js",
+  "/src/ui/sidebar.js",
   "/src/features/player.js",
   "/src/features/subtitle-editor.js",
   "/src/features/subtitle-list.js",

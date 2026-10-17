@@ -8,6 +8,7 @@
   "plugins": {
     "SystemBars": {
       "insetsHandling": "native",
+      "initialViewportFitValueHint": "cover",
       "style": "LIGHT"
     }
   }

@@ -10,7 +10,11 @@ export function createWorkspace({ store }) {
   }
   function setSaveStatus(status) {
     $("saved").textContent = {
-      saved: "✓ 已保存到本地", saving: "正在保存…", failed: "本地存储已满，请导出",
+      saved: "✓ 已保存到本地",
+      dirty: "● 未保存",
+      empty: "尚未打开项目",
+      saving: "正在保存…",
+      failed: "保存失败，请重试或导出",
     }[status];
   }
   function renderProgress() {
@@ -20,15 +24,20 @@ export function createWorkspace({ store }) {
     $("count").textContent = $("allCount").textContent = count;
     $("pendingCount").textContent = count - reviewed;
     $("reviewCount").textContent = reviewed;
-    $("progressText").textContent = count ? `校对进度 ${reviewed} / ${count}` : "导入 ASS 后开始校对";
-    $("progressBar").style.width = count ? `${reviewed / count * 100}%` : "0%";
-    $("projectInfo").textContent = count ? `ASS 字幕 · ${count} 条字幕` : "尚未载入字幕";
+    $("progressText").textContent = count
+      ? `校对进度 ${reviewed} / ${count}`
+      : "导入 ASS 后开始校对";
+    $("progressBar").style.width = count
+      ? `${(reviewed / count) * 100}%`
+      : "0%";
+    $("projectInfo").textContent = count
+      ? `ASS 字幕 · ${count} 条字幕`
+      : "尚未载入字幕";
     $("projectName").textContent = name;
     $("exportAss").disabled = count === 0;
   }
   $("help").onclick = $("helpTop").onclick = () => $("helpDialog").showModal();
   $("closeHelp").onclick = () => $("helpDialog").close();
-  $("workspace").onclick = () => window.scrollTo({ top: 0, behavior: "smooth" });
   store.subscribe((event) => {
     if (event.type !== "selection") renderProgress();
   });

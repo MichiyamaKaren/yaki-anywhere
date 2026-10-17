@@ -26,6 +26,12 @@ await cp(
   path.join(root, "node_modules/@capacitor/core/dist/index.js"),
   path.join(destination, "assets/vendor/capacitor.js"),
 );
-await cp(path.join(root, "node_modules/mediabunny/dist/bundles/mediabunny.min.mjs"), path.join(destination, "assets/vendor/mediabunny.mjs"));
-await cp(path.join(root, "node_modules/mediabunny/LICENSE"), path.join(destination, "assets/vendor/mediabunny.LICENSE.txt"));
+await cp(
+  path.join(root, "node_modules/mediabunny/dist/bundles/mediabunny.min.mjs"),
+  path.join(destination, "assets/vendor/mediabunny.mjs"),
+);
+await cp(
+  path.join(root, "node_modules/mediabunny/LICENSE"),
+  path.join(destination, "assets/vendor/mediabunny.LICENSE.txt"),
+);
 console.log("Built Capacitor web assets in dist/");

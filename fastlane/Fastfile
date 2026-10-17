@@ -1,0 +1,125 @@
+require "json"
+require "fileutils"
+
+PROJECT_ROOT = File.expand_path("..", __dir__)
+ANDROID_PROJECT = File.join(PROJECT_ROOT, "android")
+APP_GRADLE = File.join(ANDROID_PROJECT, "app", "build.gradle")
+NPM_COMMAND = Gem.win_platform? ? "npm.cmd" : "npm"
+
+default_platform(:android)
+
+def project_version
+  JSON.parse(File.read(File.join(PROJECT_ROOT, "package.json"))).fetch("version")
+end
+
+def project_package
+  JSON.parse(File.read(File.join(PROJECT_ROOT, "capacitor.config.json"))).fetch("appId")
+end
+
+def configure_android_sdk
+  sdk = ENV["ANDROID_HOME"] || ENV["ANDROID_SDK_ROOT"] || File.join(PROJECT_ROOT, ".tools", "android", "sdk")
+  UI.user_error!("Android SDK is missing. Configure ANDROID_HOME or install the project SDK.") unless File.directory?(File.join(sdk, "platforms"))
+  ENV["ANDROID_HOME"] = sdk
+  ENV["ANDROID_SDK_ROOT"] = sdk
+  ENV["GRADLE_USER_HOME"] ||= File.join(PROJECT_ROOT, ".tools", "gradle")
+  File.write(File.join(ANDROID_PROJECT, "local.properties"), "sdk.dir=#{sdk.tr('\\', '/')}\n")
+end
+
+def release_signing_properties
+  names = %w[ANDROID_KEYSTORE_FILE ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD]
+  missing = names.select { |name| ENV[name].to_s.empty? }
+  UI.user_error!("Configure #{missing.join(', ')} in fastlane/.env before building a release.") unless missing.empty?
+  keystore = File.expand_path(ENV.fetch("ANDROID_KEYSTORE_FILE"), PROJECT_ROOT)
+  UI.user_error!("The configured release keystore does not exist.") unless File.file?(keystore)
+  {
+    "android.injected.signing.store.file" => keystore,
+    "android.injected.signing.store.password" => ENV.fetch("ANDROID_KEYSTORE_PASSWORD"),
+    "android.injected.signing.key.alias" => ENV.fetch("ANDROID_KEY_ALIAS"),
+    "android.injected.signing.key.password" => ENV.fetch("ANDROID_KEY_PASSWORD")
+  }
+end
+
+platform :android do
+  private_lane :prepare_build do
+    configure_android_sdk
+    Dir.chdir(PROJECT_ROOT) { sh(NPM_COMMAND, "run", "android:sync") }
+  end
+
+  private_lane :build_android do |options|
+    release_build = options[:release]
+    signing = release_build ? release_signing_properties : {}
+    unless release_build
+      key = File.join(PROJECT_ROOT, ".tools", "android", "yaki-anywhere-debug.keystore")
+      UI.user_error!("Restore the original .tools/android/yaki-anywhere-debug.keystore before building a debug APK.") unless File.file?(key)
+    end
+    prepare_build
+    gradle(
+      task: options[:bundle] ? "bundle" : "assemble",
+      build_type: release_build ? "Release" : "Debug",
+      project_dir: ANDROID_PROJECT,
+      properties: signing,
+      flags: "--no-daemon --console=plain",
+      print_command: false
+    )
+    source = lane_context[options[:bundle] ? SharedValues::GRADLE_AAB_OUTPUT_PATH : SharedValues::GRADLE_APK_OUTPUT_PATH]
+    UI.user_error!("Gradle did not return a build artifact.") unless source && File.file?(source)
+    extension = options[:bundle] ? "aab" : "apk"
+    variant = release_build ? "release" : "debug"
+    folder = File.join(PROJECT_ROOT, "artifacts", "android")
+    FileUtils.mkdir_p(folder)
+    target = File.join(folder, "yaki-#{project_version}-#{variant}.#{extension}")
+    FileUtils.cp(source, target)
+    UI.success("Artifact: #{target}")
+    target
+  end
+
+  desc "Show the application ID, version, build number, and signing configuration"
+  lane :info do
+    UI.message("Application ID: #{project_package}")
+    UI.message("Version: #{project_version}")
+    UI.message("Version code: #{android_get_version_code(gradle_file: APP_GRADLE)}")
+    configure_android_sdk
+    gradle(task: "signingReport", project_dir: ANDROID_PROJECT, flags: "--no-daemon --console=plain")
+  end
+
+  desc "Bump npm version and Android versionCode; type:patch, type:minor, or type:major"
+  lane :bump do |options|
+    kind = options[:type] || "patch"
+    UI.user_error!("Use type:patch, type:minor, or type:major.") unless %w[patch minor major].include?(kind)
+    code = android_get_version_code(gradle_file: APP_GRADLE).to_i
+    UI.user_error!("Android versionCode must be a positive integer.") unless code.positive?
+    Dir.chdir(PROJECT_ROOT) { sh(NPM_COMMAND, "version", kind, "--no-git-tag-version") }
+    android_set_version_code(gradle_file: APP_GRADLE, version_code: code + 1)
+    UI.success("Version #{project_version}, versionCode #{code + 1}. Commit the version changes before distribution.")
+  end
+
+  desc "Build an APK with the pinned debug key; release:true uses the configured release key"
+  lane :apk do |options|
+    build_android(release: options[:release].to_s == "true", bundle: false)
+  end
+
+  desc "Build a signed release AAB for Google Play"
+  lane :aab do
+    build_android(release: true, bundle: true)
+  end
+
+  desc "Build and upload an AAB to Google Play; defaults to an internal draft"
+  lane :play do |options|
+    credentials = ENV["GOOGLE_PLAY_JSON_KEY"].to_s
+    UI.user_error!("Configure GOOGLE_PLAY_JSON_KEY in fastlane/.env before uploading.") if credentials.empty?
+    credentials = File.expand_path(credentials, PROJECT_ROOT)
+    UI.user_error!("The Google Play service-account JSON file does not exist.") unless File.file?(credentials)
+    bundle_file = build_android(release: true, bundle: true)
+    upload_to_play_store(
+      package_name: project_package,
+      json_key: credentials,
+      aab: bundle_file,
+      track: options[:track] || "internal",
+      release_status: options[:status] || "draft",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+  end
+end

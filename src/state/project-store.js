@@ -1,8 +1,11 @@
 export function emptyProject() {
   return {
     lines: [
-      "[Script Info]", "Title: Untitled subtitles", "ScriptType: v4.00+",
-      "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+      "[Script Info]",
+      "Title: Untitled subtitles",
+      "ScriptType: v4.00+",
+      "[Events]",
+      "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ],
     entries: [],
   };
@@ -45,7 +48,12 @@ export function createProjectStore(draft = {}) {
     },
     updateTiming(start, end, { transient = false, force = false } = {}) {
       if (!current()) return;
-      if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
+      if (
+        !Number.isFinite(start) ||
+        !Number.isFinite(end) ||
+        start < 0 ||
+        end <= start
+      ) {
         throw Error("结束时间必须晚于开始时间，且时间不能为负数");
       }
       if (!force && current().start === start && current().end === end) return;
@@ -59,10 +67,21 @@ export function createProjectStore(draft = {}) {
       emit({ type: "review", indices: [target] });
     },
     approveCompletedSubtitles(from, to) {
-      if (from === null || !Number.isFinite(from) || !Number.isFinite(to) || to < from) return;
+      if (
+        from === null ||
+        !Number.isFinite(from) ||
+        !Number.isFinite(to) ||
+        to < from
+      )
+        return;
       const indices = [];
       project.entries.forEach((entry, i) => {
-        if (!entry.reviewed && entry.start <= from && entry.end > from && entry.end <= to) {
+        if (
+          !entry.reviewed &&
+          entry.start <= from &&
+          entry.end > from &&
+          entry.end <= to
+        ) {
           entry.reviewed = true;
           indices.push(i);
         }

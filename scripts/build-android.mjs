@@ -1,62 +1,61 @@
-import { spawn } from "node:child_process";
-import {
-  existsSync,
-  writeFileSync,
-  mkdirSync,
-  copyFileSync,
-  readFileSync,
-} from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sdkRoot =
-  process.env.ANDROID_HOME ||
-  process.env.ANDROID_SDK_ROOT ||
-  path.join(root, ".tools/android/sdk");
-if (!existsSync(path.join(sdkRoot, "platforms/android-36/android.jar"))) {
-  console.error(
-    "Android SDK 36 is missing. Install it with Android Studio or scripts/setup-android-sdk.ps1, then run android:apk again.",
-  );
-  process.exit(1);
+const [lane = "apk", ...options] = process.argv.slice(2);
+const rubyBin = path.join(root, ".tools/ruby/bin");
+const localRuby = path.join(
+  rubyBin,
+  process.platform === "win32" ? "ruby.exe" : "ruby",
+);
+const configuredRuby = process.env.RUBY_EXECUTABLE || "ruby";
+const systemRubyAvailable =
+  spawnSync(configuredRuby, ["--version"], {
+    cwd: root,
+    stdio: "ignore",
+    windowsHide: true,
+  }).status === 0;
+let installedRuby;
+if (process.platform === "win32" && !systemRubyAvailable) {
+  try {
+    installedRuby = readdirSync("C:\\", { withFileTypes: true })
+      .filter((entry) => /^Ruby\d+-x64$/i.test(entry.name))
+      .map((entry) => path.join("C:\\", entry.name, "bin", "ruby.exe"))
+      .find(existsSync);
+  } catch {
+    // Fall back to the project-local Ruby when the drive root is not readable.
+  }
 }
-writeFileSync(
-  path.join(root, "android/local.properties"),
-  "sdk.dir=" + sdkRoot.replaceAll("\\", "/") + "\n",
-);
-const isWindows = process.platform === "win32";
-const result = spawn(
-  isWindows ? "gradlew.bat" : "./gradlew",
-  ["assembleDebug", "--no-daemon", "--console=plain"],
-  {
-    cwd: path.join(root, "android"),
-    env: {
-      ...process.env,
-      ANDROID_HOME: sdkRoot,
-      ANDROID_SDK_ROOT: sdkRoot,
-      GRADLE_USER_HOME: path.join(root, ".tools/gradle"),
-    },
-    stdio: "inherit",
-    shell: isWindows,
+const ruby = systemRubyAvailable
+  ? configuredRuby
+  : installedRuby || (existsSync(localRuby) ? localRuby : "ruby");
+const bundleArgs =
+  lane === "setup"
+    ? ["install", ...options]
+    : ["exec", "fastlane", "android", lane, ...options];
+const result = spawn(ruby, ["-S", "bundle", ...bundleArgs], {
+  cwd: root,
+  env: {
+    ...process.env,
+    PATH: path.dirname(ruby) + path.delimiter + (process.env.PATH || ""),
+    BUNDLE_GEMFILE: path.join(root, "Gemfile"),
+    BUNDLE_PATH: process.env.BUNDLE_PATH || path.join(root, ".tools/gems"),
+    BUNDLE_USER_HOME:
+      process.env.BUNDLE_USER_HOME || path.join(root, ".tools/bundler"),
+    GRADLE_USER_HOME: path.join(root, ".tools/gradle"),
+    FASTLANE_SKIP_UPDATE_CHECK: "1",
+    FASTLANE_OPT_OUT_USAGE: "1",
   },
-);
+  stdio: "inherit",
+});
 result.on("error", (error) => {
-  console.error(`Could not start Android Gradle build: ${error.message}`);
+  console.error(
+    `Could not start fastlane: ${error.message}. Install Ruby 3.3+ and run npm run android:setup.`,
+  );
   process.exitCode = 1;
 });
 result.on("exit", (code) => {
   process.exitCode = code ?? 1;
-  if (code === 0) {
-    const version = JSON.parse(
-      readFileSync(path.join(root, "package.json"), "utf8"),
-    ).version.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const folder = path.join(root, "artifacts/android");
-    mkdirSync(folder, { recursive: true });
-    const filename = "yaki-" + version + "-debug.apk";
-    copyFileSync(
-      path.join(root, "android/app/build/outputs/apk/debug/app-debug.apk"),
-      path.join(folder, filename),
-    );
-    console.log("APK: artifacts/android/" + filename);
-  }
 });

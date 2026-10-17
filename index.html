@@ -12,16 +12,37 @@
     <link rel="icon" href="/assets/icons/icon.svg" />
     <link rel="stylesheet" href="/src/styles/app.css" />
     <title>Yaki Anywhere · 字幕工作台</title>
+    <!-- Overwrite-install persistence test build marker: 2026-10-17 -->
   </head>
   <body>
-    <aside class="sidebar">
-      <a class="brand" href="/" aria-label="Yaki Anywhere 首页"
-        ><span class="brand-icon">y.</span><span>Yaki Anywhere</span></a
-      >
+    <div
+      class="sidebar-backdrop"
+      id="sidebarBackdrop"
+      hidden
+      aria-hidden="true"
+    ></div>
+    <aside class="sidebar" id="appSidebar" aria-label="主导航">
+      <div class="sidebar-heading">
+        <a class="brand" href="#/workspace" aria-label="Yaki Anywhere 首页"
+          ><span class="brand-icon">y.</span><span>Yaki Anywhere</span></a
+        >
+        <button
+          class="sidebar-close icon-button"
+          id="closeSidebar"
+          aria-label="关闭侧边栏"
+        >
+          ×
+        </button>
+      </div>
       <div class="space-label">你的创作空间</div>
-      <button class="nav active" id="workspace">
-        ▤ <span>字幕工作台</span><span class="nav-dot"></span></button
-      ><button class="nav" id="openProject">▱ <span>导入字幕</span></button>
+      <nav aria-label="页面导航">
+        <a class="nav active" id="workspace" href="#/workspace"
+          >▤ <span>字幕工作台</span><span class="nav-dot"></span
+        ></a>
+        <a class="nav" id="manageProjects" href="#/projects"
+          >▱ <span>项目管理</span><span class="nav-dot"></span
+        ></a>
+      </nav>
       <div class="sidebar-note">
         <span class="note-icon">✧</span>
         <h3>让好故事，跨越语言。</h3>
@@ -35,248 +56,335 @@
         <span>⌄</span>
       </div>
     </aside>
-    <main>
+    <main id="workspaceContent" inert>
       <header>
-        <div class="breadcrumb">
-          工作空间 <span>/</span> <strong>字幕工作台</strong>
+        <div class="header-left">
+          <button
+            class="menu-button icon-button"
+            id="openSidebar"
+            aria-label="打开侧边栏"
+            aria-controls="appSidebar"
+            aria-expanded="false"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <div class="breadcrumb">
+            <span class="breadcrumb-parent">工作空间</span>
+            <span class="breadcrumb-parent">/</span>
+            <strong id="pageBreadcrumb">字幕工作台</strong>
+          </div>
         </div>
         <div class="header-right">
-          <span class="saved" id="saved">✓ 已保存到本地</span
-          ><button class="icon-button" id="helpTop" aria-label="使用指南">
+          <span class="saved" id="saved">正在读取项目…</span>
+          <button
+            class="text-button"
+            id="saveProject"
+            title="保存项目（Ctrl / ⌘ S）"
+            disabled
+          >
+            保存
+          </button>
+          <button class="icon-button" id="helpTop" aria-label="使用指南">
             ?
           </button>
         </div>
       </header>
-      <section class="page-heading">
-        <div>
-          <div class="eyebrow">SUBTITLE STUDIO</div>
-          <h1>导入字幕，开始校对<span>。</span></h1>
-          <p>加载 ASS 文件，编辑每一条字幕。</p>
-        </div>
-        <div class="heading-actions">
-          <button class="button secondary" id="importAss">
-            ↥ <span>导入 ASS</span></button
-          ><button class="button primary" id="exportAss">
-            ↧ <span>导出字幕</span>
-          </button>
-        </div>
-      </section>
-      <div class="project-bar">
-        <div class="project-name">
-          <span class="file-icon">ASS</span>
+      <section
+        class="app-page"
+        id="projectsPage"
+        aria-labelledby="projectsPageTitle"
+        hidden
+      >
+        <div class="page-heading projects-page-heading">
           <div>
-            <strong id="projectName">未命名项目</strong
-            ><small id="projectInfo">尚未载入字幕</small>
+            <div class="eyebrow">YOUR PROJECTS</div>
+            <h1 id="projectsPageTitle">项目管理</h1>
+            <p>管理保存在此设备的字幕项目和视频关联。</p>
+          </div>
+          <div class="heading-actions">
+            <button
+              class="button primary"
+              id="newProject"
+              data-import-project
+              disabled
+            >
+              ＋ 导入 ASS 创建项目</button
+            ><button class="button secondary" id="backToWorkspace">
+              返回工作台
+            </button>
           </div>
         </div>
-        <div class="progress-info">
-          <span id="progressText">导入 ASS 后开始校对</span>
-          <div class="progress-track"><i id="progressBar"></i></div>
+        <div class="projects-toolbar">
+          <span id="projectTotal" role="status">正在读取项目…</span
+          ><button class="text-button" id="closeProject" disabled>
+            关闭当前项目
+          </button>
         </div>
-      </div>
-      <div class="studio">
-        <section class="left-column">
-          <div class="video-card">
-            <div class="panel-top">
-              <h2><span class="purple-dot"></span>视频预览</h2>
-              <button class="text-button" id="importVideo">↥ 加载视频</button>
+        <div class="projects-grid" id="projectList"></div>
+        <p class="projects-storage-note">
+          ASS 副本和校对状态保存在此设备。导出后可交给其他应用使用。
+        </p>
+      </section>
+      <section class="app-page" id="editorPage" aria-label="字幕工作台">
+        <section class="page-heading">
+          <div>
+            <div class="eyebrow">SUBTITLE STUDIO</div>
+            <h1 id="projectTitle">导入字幕，开始校对</h1>
+            <p>加载 ASS 文件，编辑每一条字幕。</p>
+          </div>
+          <div class="heading-actions">
+            <button class="button secondary" id="importAss" disabled>
+              ↥ <span>导入 ASS</span></button
+            ><button class="button primary" id="exportAss">
+              ↧ <span>导出字幕</span>
+            </button>
+          </div>
+        </section>
+        <div class="project-bar">
+          <div class="project-name">
+            <span class="file-icon">ASS</span>
+            <div>
+              <strong id="projectName">未命名项目</strong
+              ><small id="projectInfo">尚未载入字幕</small>
             </div>
-            <div class="video-stage" id="videoStage">
-              <video id="video" playsinline preload="metadata"></video>
-              <div class="video-empty" id="videoEmpty">
-                <div class="landscape">
-                  <div class="sun"></div>
-                  <div class="mountain back"></div>
-                  <div class="mountain front"></div>
-                  <div class="lake"></div>
-                </div>
-                <span class="preview-label">YOUR NEXT STORY STARTS HERE</span
-                ><button
-                  class="empty-play"
-                  id="emptyPlay"
-                  aria-label="加载视频"
-                >
-                  ▷
+          </div>
+          <div class="progress-info">
+            <span id="progressText">导入 ASS 后开始校对</span>
+            <div class="progress-track"><i id="progressBar"></i></div>
+          </div>
+        </div>
+        <div class="studio">
+          <section class="left-column">
+            <div class="video-card">
+              <div class="panel-top">
+                <h2><span class="purple-dot"></span>视频预览</h2>
+                <span class="video-status" id="videoStatus">尚未关联视频</span>
+                <button class="text-button" id="allowVideo" hidden>
+                  允许访问视频
                 </button>
-                <p>载入一段视频，开始你的创作</p>
-                <small>支持浏览器可播放的 MP4 / WebM 等格式</small>
+                <button class="text-button" id="importVideo" disabled>
+                  ↥ 加载视频
+                </button>
               </div>
-              <div id="subtitleOverlay" class="subtitle-overlay"></div>
-              <span class="video-local">◉ 仅在本机处理</span>
-            </div>
-            <div class="video-controls">
-              <button class="icon-button" id="play" aria-label="播放或暂停">
-                ▶</button
-              ><span id="currentTime">00:00</span
-              ><input
-                type="range"
-                id="seek"
-                aria-label="视频播放进度"
-                min="0"
-                max="40"
-                step="0.01"
-                value="0"
-              /><span id="duration">00:40</span
-              ><select id="speed" aria-label="播放速度">
-                <option value="0.75">0.75×</option>
-                <option value="1" selected>1×</option>
-                <option value="1.25">1.25×</option>
-                <option value="1.5">1.5×</option></select
-              ><button
-                class="icon-button"
-                id="fullscreen"
-                aria-label="全屏播放"
-              >
-                ⛶
-              </button>
-            </div>
-            <details class="playback-panel">
-              <summary>
-                播放设置 <span class="collapse-hint">展开 / 收起</span>
-              </summary>
-              <div class="play-mode">
-                <div class="segmented">
-                  <button class="selected" data-mode="continuous">
-                    ↻ 连续播放</button
-                  ><button data-mode="single">▷ 按条播放</button
-                  ><button data-mode="loop">⟳ 单句循环</button>
+              <div class="video-stage" id="videoStage">
+                <video id="video" playsinline preload="metadata"></video>
+                <div class="video-empty" id="videoEmpty">
+                  <div class="landscape">
+                    <div class="sun"></div>
+                    <div class="mountain back"></div>
+                    <div class="mountain front"></div>
+                    <div class="lake"></div>
+                  </div>
+                  <span class="preview-label">YOUR NEXT STORY STARTS HERE</span
+                  ><button
+                    class="empty-play"
+                    id="emptyPlay"
+                    aria-label="加载视频"
+                  >
+                    ▷
+                  </button>
+                  <p>载入一段视频，开始你的创作</p>
+                  <small>支持浏览器可播放的 MP4 / WebM 等格式</small>
                 </div>
-                <div class="playback-options">
-                  <button
-                    id="autoApprove"
-                    class="auto-approve"
-                    aria-pressed="false"
-                    title="开启后，播放结束的字幕自动标为已校对"
-                  >
-                    自动批准</button
+                <div id="subtitleOverlay" class="subtitle-overlay"></div>
+                <span class="video-local">◉ 仅在本机处理</span>
+              </div>
+              <div class="video-controls">
+                <button class="icon-button" id="play" aria-label="播放或暂停">
+                  ▶</button
+                ><span id="currentTime">00:00</span
+                ><input
+                  type="range"
+                  id="seek"
+                  aria-label="视频播放进度"
+                  min="0"
+                  max="40"
+                  step="0.01"
+                  value="0"
+                /><span id="duration">00:40</span
+                ><select id="speed" aria-label="播放速度">
+                  <option value="0.75">0.75×</option>
+                  <option value="1" selected>1×</option>
+                  <option value="1.25">1.25×</option>
+                  <option value="1.5">1.5×</option></select
+                ><button
+                  class="icon-button"
+                  id="fullscreen"
+                  aria-label="全屏播放"
+                >
+                  ⛶
+                </button>
+              </div>
+              <details class="playback-panel">
+                <summary>
+                  播放设置 <span class="collapse-hint">展开 / 收起</span>
+                </summary>
+                <div class="play-mode">
+                  <div class="segmented">
+                    <button class="selected" data-mode="continuous">
+                      ↻ 连续播放</button
+                    ><button data-mode="single">▷ 按条播放</button
+                    ><button data-mode="loop">⟳ 单句循环</button>
+                  </div>
+                  <div class="playback-options">
+                    <button
+                      id="autoApprove"
+                      class="auto-approve"
+                      aria-pressed="false"
+                      title="开启后，播放结束的字幕自动标为已校对"
+                    >
+                      自动批准</button
+                    ><label
+                      ><input id="follow" type="checkbox" checked />
+                      自动跟随</label
+                    >
+                  </div>
+                </div>
+              </details>
+            </div>
+            <details class="editor-card" id="editorPanel" open>
+              <summary>
+                <span class="panel-title"
+                  >当前字幕
+                  <span id="selectedNumber" class="number-chip">—</span></span
+                ><span class="collapse-hint">展开 / 收起</span>
+              </summary>
+              <div class="editor-body">
+                <div class="editor-toolbar">
+                  <div class="editor-navigation">
+                    <button id="previous" aria-label="上一条">‹</button
+                    ><span id="position">等待导入</span
+                    ><button id="next" aria-label="下一条">›</button>
+                  </div>
+                </div>
+                <label for="subtitleText" class="sr-only">字幕文本</label
+                ><textarea
+                  id="subtitleText"
+                  rows="2"
+                  spellcheck="false"
+                  placeholder="编辑字幕文本…"
+                ></textarea>
+                <section class="inline-timeline" aria-label="当前字幕时间轴">
+                  <div class="timeline-heading">
+                    <h2>时间轴调整</h2>
+                    <label class="timeline-zoom"
+                      >缩放<input
+                        id="timelineZoom"
+                        type="range"
+                        aria-label="时间轴缩放"
+                        min="0.5"
+                        max="4"
+                        step="0.1"
+                        value="1"
+                      /><output id="timelineZoomValue" for="timelineZoom"
+                        >100%</output
+                      ></label
+                    >
+                  </div>
+                  <div class="timeline-scroll" id="timelineScroll">
+                    <div class="timeline" id="timeline">
+                      <div class="ruler" id="ruler"></div>
+                      <canvas
+                        id="audioSpectrum"
+                        class="audio-spectrum"
+                        role="img"
+                        aria-label="当前字幕音频频谱：横轴为时间，纵轴为频率，颜色越亮能量越强"
+                      ></canvas>
+                      <div
+                        id="audioFrequencyLabels"
+                        class="audio-frequency-labels"
+                        hidden
+                      >
+                        <span>8 kHz</span><span>50 Hz</span>
+                      </div>
+                      <div class="timeline-track" id="timelineTrack"></div>
+                      <div class="playhead" id="playhead"></div>
+                    </div>
+                  </div>
+                  <div class="timeline-hint">
+                    <span id="audioSpectrumStatus" role="status"
+                      >加载视频后显示音频频谱</span
+                    >
+                    <span>拖动字幕块或两端调整时间</span>
+                  </div>
+                </section>
+                <div class="timing-fields">
+                  <label
+                    >开始时间<input
+                      id="startTime"
+                      aria-label="开始时间"
+                      inputmode="decimal" /></label
+                  ><span class="time-arrow">→</span
                   ><label
-                    ><input id="follow" type="checkbox" checked />
-                    自动跟随</label
-                  >
+                    >结束时间<input
+                      id="endTime"
+                      aria-label="结束时间"
+                      inputmode="decimal" /></label
+                  ><span class="duration-badge" id="lineDuration">—</span>
+                </div>
+                <div class="editor-footer">
+                  <button class="text-button" id="playLine">▷ 播放这一句</button
+                  ><button class="button primary" id="review">
+                    ✓ 确认并下一条
+                  </button>
                 </div>
               </div>
             </details>
-          </div>
-          <details class="editor-card" id="editorPanel" open>
+          </section>
+          <details class="list-card" id="listPanel" open>
             <summary>
               <span class="panel-title"
-                >当前字幕
-                <span id="selectedNumber" class="number-chip">—</span></span
+                >字幕列表 <span class="count" id="count">0</span></span
               ><span class="collapse-hint">展开 / 收起</span>
             </summary>
-            <div class="editor-body">
-              <div class="editor-toolbar">
-                <div class="editor-navigation">
-                  <button id="previous" aria-label="上一条">‹</button
-                  ><span id="position">等待导入</span
-                  ><button id="next" aria-label="下一条">›</button>
+            <div class="list-body">
+              <div class="list-action">
+                <button class="text-button" id="jumpCurrent">◎ 定位当前</button>
+              </div>
+              <div class="list-tools">
+                <div class="search-box">
+                  <span>⌕</span
+                  ><input
+                    id="search"
+                    placeholder="搜索字幕文本"
+                    aria-label="搜索字幕"
+                  /><span>⌘ K</span>
+                </div>
+                <div class="filter-tabs">
+                  <button class="selected" data-filter="all">
+                    全部字幕 <span id="allCount">0</span></button
+                  ><button data-filter="pending">
+                    待校对 <span id="pendingCount">0</span></button
+                  ><button data-filter="reviewed">
+                    已校对 <span id="reviewCount">0</span>
+                  </button>
                 </div>
               </div>
-              <label for="subtitleText" class="sr-only">字幕文本</label
-              ><textarea
-                id="subtitleText"
-                rows="2"
-                spellcheck="false"
-                placeholder="编辑字幕文本…"
-              ></textarea>
-              <section class="inline-timeline" aria-label="当前字幕时间轴">
-                <div class="timeline-heading">
-                  <h2>时间轴调整</h2>
-                  <label class="timeline-zoom"
-                    >缩放<input
-                      id="timelineZoom"
-                      type="range"
-                      aria-label="时间轴缩放"
-                      min="0.5"
-                      max="4"
-                      step="0.1"
-                      value="1"
-                    /><output id="timelineZoomValue" for="timelineZoom"
-                      >100%</output
-                    ></label
-                  >
-                </div>
-                <div class="timeline-scroll" id="timelineScroll">
-                  <div class="timeline" id="timeline">
-                    <div class="ruler" id="ruler"></div>
-                    <canvas id="audioSpectrum" class="audio-spectrum" role="img"
-                      aria-label="当前字幕音频频谱：横轴为时间，纵轴为频率，颜色越亮能量越强"></canvas>
-                    <div id="audioFrequencyLabels" class="audio-frequency-labels" hidden>
-                      <span>8 kHz</span><span>50 Hz</span>
-                    </div>
-                    <div class="timeline-track" id="timelineTrack"></div>
-                    <div class="playhead" id="playhead"></div>
-                  </div>
-                </div>
-                <div class="timeline-hint">
-                  <span id="audioSpectrumStatus" role="status">加载视频后显示音频频谱</span>
-                  <span>拖动字幕块或两端调整时间</span>
-                </div>
-              </section>
-              <div class="timing-fields">
-                <label
-                  >开始时间<input
-                    id="startTime"
-                    aria-label="开始时间"
-                    inputmode="decimal" /></label
-                ><span class="time-arrow">→</span
-                ><label
-                  >结束时间<input
-                    id="endTime"
-                    aria-label="结束时间"
-                    inputmode="decimal" /></label
-                ><span class="duration-badge" id="lineDuration">—</span>
-              </div>
-              <div class="editor-footer">
-                <button class="text-button" id="playLine">▷ 播放这一句</button
-                ><button class="button primary" id="review">
-                  ✓ 确认并下一条
-                </button>
+              <div class="subtitle-list" id="subtitleList"></div>
+              <div class="list-footer">
+                <span><i class="purple-dot"></i> 点击字幕，即刻定位画面</span
+                ><span>ASS</span>
               </div>
             </div>
           </details>
-        </section>
-        <details class="list-card" id="listPanel" open>
-          <summary>
-            <span class="panel-title"
-              >字幕列表 <span class="count" id="count">0</span></span
-            ><span class="collapse-hint">展开 / 收起</span>
-          </summary>
-          <div class="list-body">
-            <div class="list-action">
-              <button class="text-button" id="jumpCurrent">◎ 定位当前</button>
-            </div>
-            <div class="list-tools">
-              <div class="search-box">
-                <span>⌕</span
-                ><input
-                  id="search"
-                  placeholder="搜索字幕文本"
-                  aria-label="搜索字幕"
-                /><span>⌘ K</span>
-              </div>
-              <div class="filter-tabs">
-                <button class="selected" data-filter="all">
-                  全部字幕 <span id="allCount">0</span></button
-                ><button data-filter="pending">
-                  待校对 <span id="pendingCount">0</span></button
-                ><button data-filter="reviewed">
-                  已校对 <span id="reviewCount">0</span>
-                </button>
-              </div>
-            </div>
-            <div class="subtitle-list" id="subtitleList"></div>
-            <div class="list-footer">
-              <span><i class="purple-dot"></i> 点击字幕，即刻定位画面</span
-              ><span>ASS</span>
-            </div>
-          </div>
-        </details>
-      </div>
-      <footer class="page-footer">
-        <span><span class="brand-mini">y.</span> 为每一个认真对待文字的人</span
-        ><span>本地自动保存 <i>·</i> 随时随地，字幕随行</span>
-      </footer>
+        </div>
+        <footer class="page-footer">
+          <span
+            ><span class="brand-mini">y.</span> 为每一个认真对待文字的人</span
+          ><span>项目保存在此设备 <i>·</i> 随时随地，字幕随行</span>
+        </footer>
+      </section>
     </main>
     <input type="file" id="assFile" accept=".ass,.ssa" hidden /><input
       type="file"
@@ -285,6 +393,29 @@
       hidden
     />
     <div id="toast" role="status"></div>
+    <dialog id="unsavedDialog" aria-labelledby="unsavedTitle">
+      <form method="dialog">
+        <h2 id="unsavedTitle">当前项目有未保存的修改</h2>
+        <p>请选择保存后继续，或放弃这些修改。</p>
+        <div class="dialog-actions">
+          <button class="button secondary" value="cancel" autofocus>取消</button
+          ><button class="button secondary" value="discard">放弃修改</button
+          ><button class="button primary" value="save">保存并继续</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="renameProjectDialog" aria-labelledby="renameProjectTitle">
+      <form method="dialog" id="renameProjectForm">
+        <h2 id="renameProjectTitle">重命名项目</h2>
+        <label for="renameProjectInput">项目名称</label
+        ><input id="renameProjectInput" maxlength="120" required />
+        <div class="dialog-actions">
+          <button class="button secondary" value="cancel" formnovalidate>
+            取消</button
+          ><button class="button primary" value="rename">确定</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="helpDialog">
       <button id="closeHelp" class="icon-button" aria-label="关闭指南">
         ×
@@ -301,7 +432,8 @@
         ASS；原有样式与其他事件会保留。字幕中的所有行均作为同一条文本保留，不区分原文和译文。
       </p>
       <p>
-        修改自动保存在当前浏览器。视频不上传，刷新后需重新选择。预览展示纯文本，复杂
+        普通编辑请点击保存或按 Ctrl / ⌘
+        S。自动批准开启时自动保存修改，切到后台也会保存。网页视频仅保存文件关联；必要时需重新授权或选择。预览展示纯文本，复杂
         ASS 特效请在专业播放器中检查。
       </p>
       <p id="installHelp">

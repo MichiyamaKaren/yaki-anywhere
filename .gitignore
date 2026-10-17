@@ -5,6 +5,18 @@ coverage/
 
 # Downloaded Android SDK, Gradle distributions/dependencies and staging files
 .tools/
+.bundle/
+
+# Signing keys and fastlane credentials stay local; commit only example settings.
+*.keystore
+*.jks
+fastlane/.env
+fastlane/.env.*
+!fastlane/.env.example
+fastlane/report.xml
+fastlane/README.md
+fastlane/Preview.html
+fastlane/test_output/
 
 # APK delivery copies
 artifacts/
