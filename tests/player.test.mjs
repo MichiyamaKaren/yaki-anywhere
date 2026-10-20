@@ -4,7 +4,7 @@ import { createPlayer } from "../src/features/player.js";
 import { parseASS } from "../src/lib/subtitles.js";
 import { createProjectStore } from "../src/state/project-store.js";
 
-function setup(context, { media = false } = {}) {
+function setup(context, { media = false, getMediaTimeOrigin = () => 0 } = {}) {
   const previousDocument = globalThis.document;
   const elements = new Map();
   const element = (id) => {
@@ -63,7 +63,7 @@ function setup(context, { media = false } = {}) {
   });
   const events = [];
   store.subscribe((event) => events.push(event));
-  const player = createPlayer({ store, toast: assert.fail, onPosition() {} });
+  const player = createPlayer({ store, toast: assert.fail, onPosition() {}, getMediaTimeOrigin });
   if (media) {
     player.loadMedia({ url: "test:video" });
     video.readyState = 1;
@@ -197,4 +197,102 @@ test("loading media retains the latest selection until metadata arrives", (conte
   assert.equal(video.currentTime, 8);
   assert.equal(store.getState().index, 2);
   assert.equal(player.getPosition(), 8);
+});
+
+test("nonzero media timestamps use ASS time for seeking, overlays and following", async (context) => {
+  const origin = 1.3850113378684807;
+  const { store, player, video, element, modes } = setup(context, {
+    media: true, getMediaTimeOrigin: () => origin,
+  });
+  assert.equal(video.currentTime, origin, "project zero skips the media's leading timestamp gap");
+  player.seek(4);
+  assert.equal(video.currentTime, 4 + origin);
+  assert.equal(player.getPosition(), 4);
+  video.currentTime = 6;
+  video.ontimeupdate();
+  assert.equal(element("subtitleOverlay").textContent, "第二条");
+  assert.equal(element("currentTime").textContent, "00:04");
+  assert.equal(Number(element("seek").max), 20 - origin);
+  video.currentTime = 8;
+  video.ontimeupdate();
+  assert.equal(element("subtitleOverlay").textContent, "", "third subtitle must not appear early");
+  video.currentTime = 8 + origin;
+  video.ontimeupdate();
+  assert.equal(store.getState().index, 2);
+  modes.loop.onclick();
+  await player.playLine();
+  assert.equal(video.currentTime, 8 + origin);
+  video.currentTime = 10 + origin;
+  video.ontimeupdate();
+  assert.equal(video.currentTime, 8 + origin);
+  assert.deepEqual(store.getState().project.entries.map(e => [e.start, e.end]), [[0, 2], [4, 6], [8, 10]]);
+});
+
+test("metadata and timing can arrive in either order without losing the latest ASS selection", async (context) => {
+  let resolveOrigin;
+  const { store, player, video } = setup(context, {
+    getMediaTimeOrigin: () => new Promise(resolve => { resolveOrigin = resolve; }),
+  });
+  player.loadMedia({ url: "test:video" });
+  video.readyState = 1;
+  video.onloadedmetadata();
+  store.selectSubtitle(2);
+  assert.equal(player.getPosition(), 8);
+  resolveOrigin(1.385);
+  await Promise.resolve();
+  assert.equal(video.currentTime, 9.385);
+  assert.equal(player.getPosition(), 8);
+});
+
+test("stale media timing cannot change a replacement video or a cleared player", async (context) => {
+  const pending = [];
+  const { player, video } = setup(context, {
+    getMediaTimeOrigin: () => new Promise(resolve => pending.push(resolve)),
+  });
+  player.loadMedia({ url: "test:first" });
+  player.loadMedia({ url: "test:second" });
+  video.readyState = 1;
+  video.onloadedmetadata();
+  player.seek(4);
+  pending[1](0.5);
+  await Promise.resolve();
+  pending[0](10);
+  await Promise.resolve();
+  assert.equal(video.currentTime, 4.5);
+  player.loadMedia({ url: "test:third" });
+  player.clearMedia();
+  pending[2](20);
+  await Promise.resolve();
+  assert.equal(player.getPosition(), 0);
+});
+
+test("single-line stopping and automatic approval use ASS end times with a media origin", async (context) => {
+  const origin = 1.385;
+  const { player, video, modes, store, element } = setup(context, {
+    media: true, getMediaTimeOrigin: () => origin,
+  });
+  element("autoApprove").onclick();
+  modes.single.onclick();
+  await player.playLine();
+  video.currentTime = 2;
+  video.ontimeupdate();
+  assert.equal(video.paused, false, "raw time 2 is still inside the first ASS cue");
+  assert.equal(store.current().reviewed, false);
+  video.currentTime = 2 + origin;
+  video.ontimeupdate();
+  assert.equal(video.paused, true);
+  assert.equal(store.current().reviewed, true);
+});
+
+test("unsupported timing metadata falls back to the media's normal clock", async (context) => {
+  const { player, video } = setup(context, {
+    getMediaTimeOrigin: () => Promise.reject(Error("Unsupported format")),
+  });
+  player.loadMedia({ url: "test:video" });
+  video.readyState = 1;
+  video.onloadedmetadata();
+  player.seek(4);
+  await Promise.resolve();
+  assert.equal(video.currentTime, 4);
+  assert.equal(player.getPosition(), 4);
 });

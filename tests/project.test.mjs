@@ -247,7 +247,7 @@ test("player preserves follow, approval seek guards, single-line pause and empty
   const store = makeStore(),
     events = [];
   store.subscribe((event) => events.push(event));
-  const player = createPlayer({ store, toast: assert.fail, onPosition() {} });
+  const player = createPlayer({ store, toast: assert.fail, onPosition() {}, getMediaTimeOrigin: () => 0 });
   player.loadMedia({ url: "test:video" });
   video.onloadedmetadata();
   element("autoApprove").onclick();

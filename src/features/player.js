@@ -1,5 +1,6 @@
 import { byId as $ } from "../lib/dom.js";
 import { plainText } from "../lib/subtitles.js";
+import { readMediaTimeOrigin } from "../services/media-timing.js";
 
 const clock = (time) =>
   `${String(Math.floor(time / 60)).padStart(2, "0")}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
@@ -13,18 +14,27 @@ export function createPlayer({
   onMedia = () => {},
   chooseMedia = () => $("videoFile").click(),
   onAutoApproveChange = () => {},
+  getMediaTimeOrigin = readMediaTimeOrigin,
 }) {
   const video = $("video");
   let videoUrl = null,
     mode = "continuous",
     lineEnd = null,
-    pendingPosition = null;
+    pendingPosition = null,
+    mediaTimeOrigin = 0,
+    mediaTimingPending = false,
+    metadataReady = false,
+    mediaGeneration = 0,
+    mediaTimingTask = Promise.resolve();
   let follow = true,
     autoApprove = false,
     lastPlaybackTime = null,
     editingTimeline = false;
   const getPosition = () =>
-    pendingPosition ?? (videoUrl ? video.currentTime : Number($("seek").value));
+    pendingPosition ??
+    (videoUrl
+      ? Math.max(0, Math.round((video.currentTime - mediaTimeOrigin) * 1e6) / 1e6)
+      : Number($("seek").value));
   function updatePosition(time) {
     $("seek").value = time;
     $("currentTime").textContent = clock(time);
@@ -33,20 +43,20 @@ export function createPlayer({
   function renderDuration() {
     const { project } = store.getState();
     const duration = Number.isFinite(video.duration)
-      ? video.duration
+      ? Math.max(0, video.duration - mediaTimeOrigin)
       : Math.max(0.1, ...project.entries.map((entry) => entry.end));
     $("seek").max = duration;
     $("duration").textContent = clock(duration);
   }
   function renderOverlay() {
+    const time = subtitleTime(getPosition());
     $("subtitleOverlay").textContent = videoUrl
       ? store
-          .getState()
-          .project.entries.filter(
-            (entry) =>
-              subtitleTime(video.currentTime) >= entry.start &&
-              subtitleTime(video.currentTime) < entry.end,
-          )
+        .getState()
+        .project.entries.filter(
+          (entry) =>
+            time >= entry.start && time < entry.end
+        )
           .map((entry) => plainText(entry.text))
           .join("\n")
       : "";
@@ -67,9 +77,9 @@ export function createPlayer({
   function setPosition(time) {
     lastPlaybackTime = null;
     if (videoUrl) {
-      if (pendingPosition !== null || video.readyState === 0)
+      if (pendingPosition !== null || video.readyState === 0 || mediaTimingPending)
         pendingPosition = time;
-      else video.currentTime = time;
+      else video.currentTime = time + mediaTimeOrigin;
     }
     updatePosition(time);
   }
@@ -94,9 +104,12 @@ export function createPlayer({
       video.pause();
       return;
     }
+    const generation = mediaGeneration;
+    await mediaTimingTask;
+    if (generation !== mediaGeneration || !videoUrl) return;
     const entry = store.current();
     if (entry && mode !== "continuous") {
-      video.currentTime = entry.start;
+      setPosition(entry.start);
       lineEnd = entry.end;
     }
     try {
@@ -113,8 +126,11 @@ export function createPlayer({
       chooseMedia();
       return;
     }
-    video.currentTime = entry.start;
-    lineEnd = entry.end;
+    const generation = mediaGeneration;
+    await mediaTimingTask;
+    if (generation !== mediaGeneration || !videoUrl || !store.current()) return;
+    setPosition(store.current().start);
+    lineEnd = store.current().end;
     try {
       await video.play();
     } catch {
@@ -151,7 +167,7 @@ export function createPlayer({
   );
   video.ontimeupdate = () => {
     if (editingTimeline || !videoUrl || pendingPosition !== null) return;
-    const time = video.currentTime;
+    const time = getPosition();
     updatePosition(time);
     if (!video.paused) {
       if (autoApprove && !video.seeking)
@@ -160,14 +176,14 @@ export function createPlayer({
     }
     if (lineEnd !== null && time >= lineEnd) {
       if (mode === "loop" && store.current())
-        video.currentTime = store.current().start;
+        setPosition(store.current().start);
       else pauseLine();
     }
     if (mode === "continuous" && lineEnd === null) followPosition(time);
     renderOverlay();
   };
   video.onplay = () => {
-    lastPlaybackTime = video.currentTime;
+    lastPlaybackTime = getPosition();
     $("play").textContent = "❚❚";
   };
   video.onpause = () => {
@@ -179,7 +195,7 @@ export function createPlayer({
   };
   video.onseeked = () => {
     if (!videoUrl || pendingPosition !== null) return;
-    const time = video.currentTime;
+    const time = getPosition();
     if (!editingTimeline) {
       updatePosition(time);
       if (mode === "continuous" && lineEnd === null) followPosition(time);
@@ -187,20 +203,24 @@ export function createPlayer({
     }
     if (!video.paused) lastPlaybackTime = time;
   };
-  video.onloadedmetadata = () => {
-    if (!videoUrl) return;
+  function restorePosition() {
+    if (!videoUrl || mediaTimingPending || !metadataReady) return;
     renderDuration();
     if (pendingPosition !== null) {
       const time = pendingPosition;
       pendingPosition = null;
-      video.currentTime = time;
+      video.currentTime = time + mediaTimeOrigin;
     }
-    updatePosition(video.currentTime);
+    updatePosition(getPosition());
     renderOverlay();
+  }
+  video.onloadedmetadata = () => {
+    metadataReady = true;
+    restorePosition();
   };
   video.onended = () => {
     if (mode === "loop" && lineEnd !== null && store.current()) {
-      video.currentTime = store.current().start;
+      setPosition(store.current().start);
       video.play().catch(() => {});
     }
   };
@@ -214,6 +234,10 @@ export function createPlayer({
     if (videoUrl?.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
     // Metadata loads asynchronously; retain the project position until seeking is possible.
     pendingPosition = position;
+    mediaTimeOrigin = 0;
+    metadataReady = false;
+    mediaTimingPending = true;
+    const generation = ++mediaGeneration;
     videoUrl = file.url || URL.createObjectURL(file);
     video.src = videoUrl;
     onMedia(file);
@@ -222,12 +246,35 @@ export function createPlayer({
     lineEnd = null;
     $("subtitleOverlay").textContent = "";
     updatePosition(position);
+    const applyOrigin = (origin) => {
+      if (generation !== mediaGeneration) return;
+      mediaTimeOrigin = Number.isFinite(origin) ? Math.max(0, origin) : 0;
+      mediaTimingPending = false;
+      restorePosition();
+    };
+    try {
+      const origin = getMediaTimeOrigin(file);
+      if (origin && typeof origin.then === "function")
+        mediaTimingTask = origin.then(applyOrigin, () => applyOrigin(0));
+      else {
+        applyOrigin(origin);
+        mediaTimingTask = Promise.resolve();
+      }
+    } catch {
+      applyOrigin(0);
+      mediaTimingTask = Promise.resolve();
+    }
   }
   function clearMedia() {
     pauseLine();
     if (videoUrl?.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
     videoUrl = null;
     pendingPosition = null;
+    mediaGeneration++;
+    mediaTimeOrigin = 0;
+    mediaTimingPending = false;
+    metadataReady = false;
+    mediaTimingTask = Promise.resolve();
     video.removeAttribute("src");
     video.load();
     $("videoEmpty").hidden = false;

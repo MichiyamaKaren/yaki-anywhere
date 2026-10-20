@@ -3,6 +3,7 @@ import {
   copyMonoSample,
   SPECTRUM_ROWS,
 } from "../lib/spectrogram.js";
+import { getMediaTimeOrigin } from "../lib/media-timing.js";
 
 const TILE_SECONDS = 4,
   TILE_COLUMNS = 200,
@@ -28,6 +29,7 @@ async function openSource(file, id, url) {
       : new BlobSource(file, { maxCacheSize: 2 * 1024 * 1024 }),
   });
   input = next;
+  const timeOrigin = await getMediaTimeOrigin(next);
   const track = await next.getPrimaryAudioTrack();
   if (!track) throw Error("NO_AUDIO");
   if (!(await track.canDecode())) throw Error("UNSUPPORTED_AUDIO");
@@ -37,7 +39,7 @@ async function openSource(file, id, url) {
     return null;
   }
   self.postMessage({ type: "state", sourceId: id, state: "ready" });
-  return { sink: new AudioSampleSink(track), sampleRate };
+  return { sink: new AudioSampleSink(track), sampleRate, timeOrigin };
 }
 
 async function getTile(number, source, request) {
@@ -54,7 +56,8 @@ async function getTile(number, source, request) {
     Math.ceil((end - windowStart) * source.sampleRate),
   );
   let hasAudio = false;
-  for await (const sample of source.sink.samples(windowStart, end)) {
+  const decodeStart = windowStart + source.timeOrigin;
+  for await (const sample of source.sink.samples(decodeStart, end + source.timeOrigin)) {
     try {
       if (!current(request)) return null;
       // HE-AAC may decode at twice the sample rate declared in metadata.
@@ -65,7 +68,7 @@ async function getTile(number, source, request) {
         );
       }
       hasAudio =
-        copyMonoSample(sample, pcm, windowStart, source.sampleRate) || hasAudio;
+        copyMonoSample(sample, pcm, decodeStart, source.sampleRate) || hasAudio;
     } finally {
       sample.close();
     }

@@ -19,8 +19,8 @@ function setup(
       elements.set(id, {
         value: "0",
         style: {},
-        setAttribute() {},
-        removeAttribute() {},
+        setAttribute() { },
+        removeAttribute() { },
       });
     return elements.get(id);
   };
@@ -45,10 +45,10 @@ function setup(
   });
   const project = parseASS(
     "[Events]\nFormat: Start, End, Text\n" +
-      // The reviewed first cue overlaps the first pending cue's start.
-      "Dialogue: 0:00:05.00,0:00:12.00,已校对\n" +
-      "Dialogue: 0:00:10.00,0:00:12.00,首条待校对\n" +
-      "Dialogue: 0:00:15.00,0:00:17.00,最后一条",
+    // The reviewed first cue overlaps the first pending cue's start.
+    "Dialogue: 0:00:05.00,0:00:12.00,已校对\n" +
+    "Dialogue: 0:00:10.00,0:00:12.00,首条待校对\n" +
+    "Dialogue: 0:00:15.00,0:00:17.00,最后一条",
   );
   project.entries = project.entries.slice(0, reviews.length);
   project.entries.forEach((entry, i) => {
@@ -66,36 +66,36 @@ function setup(
     reads = [],
     workspaces = [];
   const repository = {
-    async migrateLegacy() {},
+    async migrateLegacy() { },
     async list() {
       return [...saved.values()].map((item) => item.record);
     },
     async getActive() {
       return record.id;
     },
-    async setActive() {},
+    async setActive() { },
     async read(id) {
       reads.push(id);
       return saved.get(id);
     },
   };
   const store = createProjectStore();
-  const player = createPlayer({ store, toast: assert.fail, onPosition() {} });
+  const player = createPlayer({ store, toast: assert.fail, onPosition() { }, getMediaTimeOrigin: () => 0 });
   element("follow").checked = follow;
   element("follow").onchange();
   const persistence = createProjectPersistence({
     store,
     repository,
-    onStatus() {},
+    onStatus() { },
     onError: assert.fail,
   });
   const nativeStorage = media
     ? {
-        async getVideo() {
-          return { url: "test:video" };
-        },
-        onCopyProgress() {},
-      }
+      async getVideo() {
+        return { url: "test:video" };
+      },
+      onCopyProgress() { },
+    }
     : null;
   const manager = createProjectManager({
     store,
@@ -199,8 +199,8 @@ test("switching projects selects the new project's first pending cue", async (co
   metadata();
   const project = parseASS(
     "[Events]\nFormat: Start, End, Text\n" +
-      "Dialogue: 0:00:20.00,0:00:22.00,另一个工程\n" +
-      "Dialogue: 0:00:30.00,0:00:32.00,继续校对",
+    "Dialogue: 0:00:20.00,0:00:22.00,另一个工程\n" +
+    "Dialogue: 0:00:30.00,0:00:32.00,继续校对",
   );
   project.entries[0].reviewed = true;
   saved.set("two", {
